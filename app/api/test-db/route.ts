@@ -9,11 +9,11 @@ export async function GET() {
       message: "¡Conexión exitosa a Mongoose/MongoDB desde Next.js!" 
     });
   } catch (error: any) {
+    console.log("Error en la conexión a la base de datos", error)
     return NextResponse.json(
       { 
         status: "error", 
-        message: "Error de conexión a la base de datos.", 
-        error: error.message 
+        message: "Error de conexión a la base de datos."
       },
       { status: 500 }
     );
