@@ -34,7 +34,7 @@ const SignInPage = () => {
         <InputField
           name="email"
           label="Email"
-          placeholder="contact@signalist.com"
+          placeholder="contact@stocket.com"
           register={register}
           error={errors.email}
           validation={{

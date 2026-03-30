@@ -5,10 +5,14 @@ import FooterLink from "@/components/forms/FooterLink";
 import InputField from "@/components/forms/InputField";
 import SelectField from "@/components/forms/SelectField";
 import { Button } from "@/components/ui/button";
+import { signUpWithEmail } from "@/lib/actions/auth.actions";
 import { INVESTMENT_GOALS, PREFERRED_INDUSTRIES, RISK_TOLERANCE_OPTIONS } from "@/lib/constants";
 import { useForm } from "react-hook-form"
+import { useRouter } from "next/navigation";
+import { toast } from "sonner"
 
 const SignUpPage = () => {
+  const router = useRouter()
   const {
     register,
     handleSubmit,
@@ -29,9 +33,13 @@ const SignUpPage = () => {
 
   const onSubmit = async (data: SignUpFormData) => {
     try {
-      console.log(data)
+      const result = await signUpWithEmail(data)
+      if (result.success) router.push('/')
     } catch (error) {
-      console.log(error)
+      console.error(error)
+      toast.error('Failed to sign up. Please try again.', {
+        description: error instanceof Error ? error.message : 'An unexpected error occurred'
+      })
     }
   }
 
@@ -58,7 +66,7 @@ const SignUpPage = () => {
         <InputField
           name="email"
           label="Email"
-          placeholder="contact@signalist.com"
+          placeholder="contact@stocket.com"
           register={register}
           error={errors.email}
           validation={{
@@ -86,7 +94,7 @@ const SignUpPage = () => {
           }}
         />
 
-        <CountrySelectField 
+        <CountrySelectField
           name="country"
           label="Country"
           control={control}
@@ -128,7 +136,7 @@ const SignUpPage = () => {
           {isSubmitting ? 'Creating Account...' : 'Start your Investment Journey'}
         </Button>
 
-        <FooterLink 
+        <FooterLink
           href="/sign-in"
           text="Already have an account?"
           linkText="Sign In"
