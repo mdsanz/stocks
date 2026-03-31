@@ -10,10 +10,13 @@ if (!MONGODB_URI) {
 }
 
 const client = new MongoClient(MONGODB_URI);
-const db = client.db();
+await client.connect();
+const db = client.db("stocket");
 
 export const auth = betterAuth({
-  database: mongodbAdapter(db),
+  database: mongodbAdapter(db, {
+    client
+  }),
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL: process.env.BETTER_AUTH_URL,
   emailAndPassword: {
