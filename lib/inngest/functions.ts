@@ -1,5 +1,5 @@
 import { sendWelcomeEmail } from "../nodemailer";
-import { inngest } from "./client"
+import { inngest, isAIEnabled } from "./client"
 import { PERSONALIZED_WELCOME_EMAIL_PROMPT } from "./prompts"
 
 export const sendSignUpEmail = inngest.createFunction(
@@ -15,8 +15,8 @@ export const sendSignUpEmail = inngest.createFunction(
 
         const prompt = PERSONALIZED_WELCOME_EMAIL_PROMPT.replace('{{userProfile}}', userProfile)
 
-        const response = await step.ai.infer("generate-welcome-intro", {
-            model: step.ai.models.gemini({ model: 'gemini-2.5-flash' }),
+        const response = isAIEnabled ? await step.ai.infer("generate-welcome-intro", {
+            model: step.ai.models.gemini({ model: 'gemini-1.5-flash' }),
             body: {
                 contents: [
                     {
@@ -25,10 +25,10 @@ export const sendSignUpEmail = inngest.createFunction(
                     }
                 ]
             }
-        })
+        }) : null
 
         await step.run('send-welcome-email', async () => {
-            const part = response.candidates?.[0]?.content?.parts?.[0]
+            const part = response?.candidates?.[0]?.content?.parts?.[0]
             const introText = (part && 'text' in part ? part.text : null) || 'Thanks for joining Stocket! You now have a powerful tool to track stocks, monitor markets, and make informed investment decisions.'
 
             const { data: { email, name }} = event
