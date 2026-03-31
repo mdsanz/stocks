@@ -15,22 +15,28 @@ export const signUpWithEmail = async ({ email, password, fullName, country, inve
             return { success: false, error: 'Signup failed. Please try again.', data: response }
         }
 
-        await inngest.send({
-            name: 'app/user.created',
-            data: {
-                email,
-                name: fullName,
-                country,
-                investmentGoals,
-                riskTolerance,
-                preferredIndustry
-            }
-        })
+        // Send Inngest event non-blocking - don't let it fail the sign-up
+        try {
+            await inngest.send({
+                name: 'app/user.created',
+                data: {
+                    email,
+                    name: fullName,
+                    country,
+                    investmentGoals,
+                    riskTolerance,
+                    preferredIndustry
+                }
+            })
+        } catch (inngestError) {
+            console.warn('Inngest event failed (non-critical):', inngestError)
+        }
 
         return { success: true, data: response }
-    } catch (error) {
-        console.log('Error signing up:', error)
-        return { success: false, error: 'Failed to sign up. Please try again.' }
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Unknown error'
+        console.error('Error signing up:', message, error)
+        return { success: false, error: message }
     }
 }
 
