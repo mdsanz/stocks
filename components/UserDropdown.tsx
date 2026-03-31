@@ -13,15 +13,26 @@ import { useRouter } from "next/navigation"
 import { Button } from "./ui/button";
 import { LogOut } from "lucide-react";
 import NavItems from "./NavItems";
+import { signOut } from "@/lib/actions/auth.actions";
 
-const UserDropdown = () => {
+import { toast } from "sonner";
+
+const UserDropdown = ({ user }: { user: User }) => {
     const router = useRouter();
 
     const handleSignOut = async () => {
-        router.push("/sign-in");
+        try {
+            const result = await signOut();
+            if (result?.success) {
+                router.push("/sign-in");
+            } else {
+                toast.error(result?.error || "Failed to sign out. Please try again.");
+            }
+        } catch (error) {
+            console.error("Logout error:", error);
+            toast.error("An unexpected error occurred during logout.");
+        }
     }
-
-    const user = { name: 'Marcos', email: 'marcos@gmail.com' };
 
     return (
         <DropdownMenu>

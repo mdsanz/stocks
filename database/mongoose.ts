@@ -32,4 +32,6 @@ export const connectToDatabase = async () => {
     }
 
     console.log(`✅ MongoDB Connected: ${cached.conn?.connection.host}`)
+
+    return cached.conn
 }
