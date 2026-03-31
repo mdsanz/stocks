@@ -15,12 +15,23 @@ import { LogOut } from "lucide-react";
 import NavItems from "./NavItems";
 import { signOut } from "@/lib/actions/auth.actions";
 
+import { toast } from "sonner";
+
 const UserDropdown = ({ user }: { user: User }) => {
     const router = useRouter();
 
     const handleSignOut = async () => {
-        await signOut();
-        router.push("/sign-in");
+        try {
+            const result = await signOut();
+            if (result?.success) {
+                router.push("/sign-in");
+            } else {
+                toast.error(result?.error || "Failed to sign out. Please try again.");
+            }
+        } catch (error) {
+            console.error("Logout error:", error);
+            toast.error("An unexpected error occurred during logout.");
+        }
     }
 
     return (

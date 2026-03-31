@@ -57,6 +57,7 @@ export const signOut = async () => {
         await auth.api.signOut({
             headers: await headers()
         })
+        return { success: true }
     } catch (error) {
         console.error('Error signing out:', error)
         return { success: false, error: 'Failed to sign out. Please try again.' }
