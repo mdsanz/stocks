@@ -3,7 +3,7 @@
 const FINNHUB_BASE_URL = 'https://finnhub.io/api/v1';
 const NEXT_PUBLIC_FINNHUB_API_KEY = process.env.NEXT_PUBLIC_FINNHUB_API_KEY || '';
 
-const fetchJSON = async (url: string, revalidateSeconds?: number) => {
+const fetchJSON = async <T>(url: string, revalidateSeconds?: number): Promise<T> => {
     const options: RequestInit = {};
     if (typeof revalidateSeconds === 'number') {
         options.cache = 'force-cache';
@@ -21,9 +21,9 @@ const fetchJSON = async (url: string, revalidateSeconds?: number) => {
         if (!res.ok) {
             throw new Error(`Finnhub returned ${res.status} ${res.statusText}`);
         }
-        return await res.json();
-    } catch (error: any) {
-        if (error.name === 'AbortError') {
+        return await res.json() as T;
+    } catch (error: unknown) {
+        if (error instanceof Error && error.name === 'AbortError') {
             throw new Error("Finnhub request timed out");
         }
         throw error;
@@ -55,7 +55,7 @@ export const getNews = async (symbols?: string[]) => {
             const pools: RawNewsArticle[][] = [];
 
             for (const sym of cleanSymbols) {
-                const data = await fetchJSON(`${FINNHUB_BASE_URL}/company-news?symbol=${sym}&from=${from}&to=${to}&token=${NEXT_PUBLIC_FINNHUB_API_KEY}`, 3600);
+                const data = await fetchJSON<RawNewsArticle[]>(`${FINNHUB_BASE_URL}/company-news?symbol=${sym}&from=${from}&to=${to}&token=${NEXT_PUBLIC_FINNHUB_API_KEY}`, 3600);
                 if (Array.isArray(data)) {
                     const valid = data.filter(a => a && a.headline && a.url && a.id);
                     if (valid.length > 0) pools.push(valid);
@@ -83,7 +83,7 @@ export const getNews = async (symbols?: string[]) => {
         }
 
         if (finalArticles.length === 0) {
-            const data = await fetchJSON(`${FINNHUB_BASE_URL}/news?category=general&token=${NEXT_PUBLIC_FINNHUB_API_KEY}`, 3600);
+            const data = await fetchJSON<RawNewsArticle[]>(`${FINNHUB_BASE_URL}/news?category=general&token=${NEXT_PUBLIC_FINNHUB_API_KEY}`, 3600);
             if (Array.isArray(data)) {
                 const valid = data.filter(a => a && a.headline && a.url && a.id);
                 const seenIds = new Set<number>();
@@ -113,7 +113,7 @@ export const getNews = async (symbols?: string[]) => {
             return timeB - timeA;
         });
 
-    } catch (error) {
+    } catch (error: unknown) {
         console.error('getNews error:', error);
         throw new Error('Failed to fetch news');
     }

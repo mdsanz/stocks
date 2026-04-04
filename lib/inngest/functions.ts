@@ -100,6 +100,11 @@ export const sendDailyNewsSummary = inngest.createFunction(
                         'a': ['href', 'target', 'rel'],
                         'img': ['src', 'alt']
                     },
+                    allowProtocolRelative: false,
+                    allowedSchemes: ['https', 'http'],
+                    allowedSchemesByTag: {
+                        img: ['https']
+                    },
                     transformTags: {
                         'a': (tagName, attribs) => {
                             return {
