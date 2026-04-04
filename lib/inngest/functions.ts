@@ -1,6 +1,9 @@
-import { sendWelcomeEmail } from "../nodemailer";
+import { getAllUsersForNewsEmail } from "../actions/user.actions";
+import { getWatchlistSymbolsByEmail } from "../actions/watchlist.actions";
+import { getNews } from "../actions/finnhub.actions";
+import { sendWelcomeEmail, sendDailyNewsEmail } from "../nodemailer";
 import { inngest, isAIEnabled } from "./client"
-import { PERSONALIZED_WELCOME_EMAIL_PROMPT } from "./prompts"
+import { PERSONALIZED_WELCOME_EMAIL_PROMPT, NEWS_SUMMARY_EMAIL_PROMPT } from "./prompts"
 
 export const sendSignUpEmail = inngest.createFunction(
     { id: 'sign-up-email', triggers: [{ event: 'app/user.created' }] },
@@ -31,8 +34,8 @@ export const sendSignUpEmail = inngest.createFunction(
             const part = response?.candidates?.[0]?.content?.parts?.[0]
             const introText = (part && 'text' in part ? part.text : null) || 'Thanks for joining Stocket! You now have a powerful tool to track stocks, monitor markets, and make informed investment decisions.'
 
-            const { data: { email, name }} = event
-            
+            const { data: { email, name } } = event
+
             return await sendWelcomeEmail({
                 email,
                 name,
@@ -44,5 +47,62 @@ export const sendSignUpEmail = inngest.createFunction(
             success: true,
             message: 'Welcome email sent successfully'
         }
+    }
+)
+
+export const sendDailyNewsSummary = inngest.createFunction(
+    { id: 'daily-news-summary', triggers: [{ event: 'app/send.daily.news' }, { cron: '0 12 * * *' }] },
+    async ({ step }) => {
+        const users = await step.run('get-all-users', async () => {
+            return getAllUsersForNewsEmail()
+        })
+
+        if (!users.length) return { success: false, message: 'No users found for news email' }
+
+        for (const user of users) {
+            const symbols = await step.run(`get-watchlist-${user.id}`, async () => {
+                if (!user.email) return [];
+                return getWatchlistSymbolsByEmail(user.email);
+            });
+
+            const newsArticles = await step.run(`fetch-news-${user.id}`, async () => {
+                return getNews(symbols);
+            });
+
+            // Step 3: Summarize news via AI
+            if (!newsArticles || newsArticles.length === 0) continue;
+
+            const prompt = NEWS_SUMMARY_EMAIL_PROMPT.replace('{{newsData}}', JSON.stringify(newsArticles));
+
+            const response = isAIEnabled ? await step.ai.infer(`generate-news-summary-${user.id}`, {
+                model: step.ai.models.gemini({ model: 'gemini-2.5-flash' }),
+                body: {
+                    contents: [
+                        {
+                            role: 'user',
+                            parts: [{ text: prompt }]
+                        }
+                    ]
+                }
+            }) : null;
+
+            const part = response?.candidates?.[0]?.content?.parts?.[0];
+            let newsContent = (part && 'text' in part ? part.text : null) || 'No news summary available for today.';
+
+            // Clean up any markdown code blocks the AI might mistakenly add
+            newsContent = newsContent.replace(/^```(html)?\n?|```$/gi, '').trim();
+
+            // Step 4: Send the emails
+            await step.run(`send-news-email-${user.id}`, async () => {
+                if (user.email) {
+                    await sendDailyNewsEmail({
+                        email: user.email,
+                        newsContent
+                    });
+                }
+            });
+        }
+
+        return { success: true, message: 'Daily news summary sent successfully' };
     }
 )
