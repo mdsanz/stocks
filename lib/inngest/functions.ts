@@ -4,6 +4,7 @@ import { getNews } from "../actions/finnhub.actions";
 import { sendWelcomeEmail, sendDailyNewsEmail } from "../nodemailer";
 import { inngest, isAIEnabled } from "./client"
 import { PERSONALIZED_WELCOME_EMAIL_PROMPT, NEWS_SUMMARY_EMAIL_PROMPT } from "./prompts"
+import sanitizeHtml from "sanitize-html";
 
 export const sendSignUpEmail = inngest.createFunction(
     { id: 'sign-up-email', triggers: [{ event: 'app/user.created' }] },
@@ -60,47 +61,71 @@ export const sendDailyNewsSummary = inngest.createFunction(
         if (!users.length) return { success: false, message: 'No users found for news email' }
 
         for (const user of users) {
-            const symbols = await step.run(`get-watchlist-${user.id}`, async () => {
-                if (!user.email) return [];
-                return getWatchlistSymbolsByEmail(user.email);
-            });
+            try {
+                const symbols = await step.run(`get-watchlist-${user.id}`, async () => {
+                    if (!user.email) return [];
+                    return getWatchlistSymbolsByEmail(user.email);
+                });
 
-            const newsArticles = await step.run(`fetch-news-${user.id}`, async () => {
-                return getNews(symbols);
-            });
+                const newsArticles = await step.run(`fetch-news-${user.id}`, async () => {
+                    return getNews(symbols);
+                });
 
-            // Step 3: Summarize news via AI
-            if (!newsArticles || newsArticles.length === 0) continue;
+                if (!newsArticles || newsArticles.length === 0) continue;
 
-            const prompt = NEWS_SUMMARY_EMAIL_PROMPT.replace('{{newsData}}', JSON.stringify(newsArticles));
+                const prompt = NEWS_SUMMARY_EMAIL_PROMPT.replace('{{newsData}}', JSON.stringify(newsArticles));
 
-            const response = isAIEnabled ? await step.ai.infer(`generate-news-summary-${user.id}`, {
-                model: step.ai.models.gemini({ model: 'gemini-2.5-flash' }),
-                body: {
-                    contents: [
-                        {
-                            role: 'user',
-                            parts: [{ text: prompt }]
+                const response = isAIEnabled ? await step.ai.infer(`generate-news-summary-${user.id}`, {
+                    model: step.ai.models.gemini({ model: 'gemini-2.5-flash' }),
+                    body: {
+                        contents: [
+                            {
+                                role: 'user',
+                                parts: [{ text: prompt }]
+                            }
+                        ]
+                    }
+                }) : null;
+
+                const part = response?.candidates?.[0]?.content?.parts?.[0];
+                let newsContent = (part && 'text' in part ? part.text : null) || 'No news summary available for today.';
+
+                // Clean up any markdown code blocks the AI might mistakenly add
+                newsContent = newsContent.replace(/^```(html)?\n?|```$/gi, '').trim();
+
+                // Sanitize output for safe HTML injection in emails
+                newsContent = sanitizeHtml(newsContent, {
+                    allowedTags: ['p', 'a', 'strong', 'em', 'ul', 'ol', 'li', 'br', 'img', 'h1', 'h2', 'h3'],
+                    allowedAttributes: {
+                        'a': ['href', 'target', 'rel'],
+                        'img': ['src', 'alt']
+                    },
+                    transformTags: {
+                        'a': (tagName, attribs) => {
+                            return {
+                                tagName: 'a',
+                                attribs: {
+                                    ...attribs,
+                                    target: '_blank',
+                                    rel: 'noopener noreferrer'
+                                }
+                            };
                         }
-                    ]
-                }
-            }) : null;
+                    }
+                });
 
-            const part = response?.candidates?.[0]?.content?.parts?.[0];
-            let newsContent = (part && 'text' in part ? part.text : null) || 'No news summary available for today.';
-
-            // Clean up any markdown code blocks the AI might mistakenly add
-            newsContent = newsContent.replace(/^```(html)?\n?|```$/gi, '').trim();
-
-            // Step 4: Send the emails
-            await step.run(`send-news-email-${user.id}`, async () => {
-                if (user.email) {
-                    await sendDailyNewsEmail({
-                        email: user.email,
-                        newsContent
-                    });
-                }
-            });
+                await step.run(`send-news-email-${user.id}`, async () => {
+                    if (user.email) {
+                        await sendDailyNewsEmail({
+                            email: user.email,
+                            newsContent
+                        });
+                    }
+                });
+            } catch (userError) {
+                console.error(`Error processing news digest for user ${user.id}:`, userError);
+                continue;
+            }
         }
 
         return { success: true, message: 'Daily news summary sent successfully' };

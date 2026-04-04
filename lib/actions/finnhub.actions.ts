@@ -12,11 +12,24 @@ const fetchJSON = async (url: string, revalidateSeconds?: number) => {
         options.cache = 'no-store';
     }
 
-    const res = await fetch(url, options);
-    if (!res.ok) {
-        throw new Error(`Finnhub returned ${res.status} ${res.statusText}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    options.signal = controller.signal;
+
+    try {
+        const res = await fetch(url, options);
+        if (!res.ok) {
+            throw new Error(`Finnhub returned ${res.status} ${res.statusText}`);
+        }
+        return await res.json();
+    } catch (error: any) {
+        if (error.name === 'AbortError') {
+            throw new Error("Finnhub request timed out");
+        }
+        throw error;
+    } finally {
+        clearTimeout(timeoutId);
     }
-    return res.json();
 };
 
 export const getNews = async (symbols?: string[]) => {

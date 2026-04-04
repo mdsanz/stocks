@@ -9,8 +9,7 @@ export const getWatchlistSymbolsByEmail = async (email: string): Promise<string[
         const db = mongoose.connection.db;
 
         if (!db) {
-            console.error('Database connection not established');
-            return [];
+            throw new Error('Database connection not established');
         }
 
         const user = await db.collection('user').findOne({ email });
@@ -30,6 +29,6 @@ export const getWatchlistSymbolsByEmail = async (email: string): Promise<string[
         return watchlist.map((item) => item.symbol.toString());
     } catch (error) {
         console.error('Error fetching watchlist symbols for email:', error);
-        return [];
+        throw error;
     }
 }
