@@ -1,5 +1,8 @@
 'use server'
 
+import { cache } from 'react';
+import { POPULAR_STOCK_SYMBOLS } from '@/lib/constants';
+
 const FINNHUB_BASE_URL = 'https://finnhub.io/api/v1';
 const NEXT_PUBLIC_FINNHUB_API_KEY = process.env.NEXT_PUBLIC_FINNHUB_API_KEY || '';
 
@@ -118,3 +121,58 @@ export const getNews = async (symbols?: string[]) => {
         throw new Error('Failed to fetch news');
     }
 }
+
+type CombinedSearchResult = FinnhubSearchResult & { exchange?: string };
+
+export const searchStocks = cache(async (query?: string): Promise<StockWithWatchlistStatus[]> => {
+    try {
+        let combinedResults: CombinedSearchResult[] = [];
+
+        if (!query) {
+            const topSymbols = POPULAR_STOCK_SYMBOLS.slice(0, 10);
+            
+            const profilePromises = topSymbols.map(symbol => 
+                fetchJSON<{ name?: string; exchange?: string }>(
+                    `${FINNHUB_BASE_URL}/stock/profile2?symbol=${symbol}&token=${NEXT_PUBLIC_FINNHUB_API_KEY}`, 
+                    3600
+                )
+            );
+            
+            const profiles = await Promise.all(profilePromises);
+
+            combinedResults = topSymbols.map((symbol, index) => {
+                const profile = profiles[index];
+                return {
+                    symbol: symbol,
+                    description: profile?.name || '',
+                    displaySymbol: symbol,
+                    type: 'Common Stock',
+                    exchange: profile?.exchange || 'US'
+                };
+            });
+        } else {
+            const trimmedQuery = query.trim();
+            const data = await fetchJSON<FinnhubSearchResponse>(
+                `${FINNHUB_BASE_URL}/search?q=${encodeURIComponent(trimmedQuery)}&token=${NEXT_PUBLIC_FINNHUB_API_KEY}`, 
+                1800
+            );
+            
+            if (data?.result) {
+                combinedResults = data.result as CombinedSearchResult[];
+            }
+        }
+
+        const mappedResults: StockWithWatchlistStatus[] = combinedResults.map(result => ({
+            symbol: result.symbol.toUpperCase(),
+            name: result.description,
+            exchange: result.exchange || result.displaySymbol || 'US',
+            type: result.type || 'Stock',
+            isInWatchlist: false
+        }));
+
+        return mappedResults.slice(0, 15);
+    } catch (error) {
+        console.error('Error in stock search:', error);
+        return [];
+    }
+});
